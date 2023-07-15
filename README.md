@@ -29,6 +29,7 @@ Note : You can also clone and build the Turtlebot3 from source.
 and then build the package again.
 
 * Open another Terminal, then give this command:
+
     `source install/setup.bash`
 
     `ros2 run hello mpc_obstacle_avoid`
