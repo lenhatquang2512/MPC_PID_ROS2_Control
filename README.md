@@ -1,6 +1,8 @@
+
 ## MPC_PID_ROS2_Control
 
 ### Requirements
+
 * Ubuntu 20.04 
 * ROS2 Foxy (or newer ROS2 is also proficient) with Turtlebot3 package installed
 * Ceres Solver
@@ -19,13 +21,16 @@ Note : You can also clone and build the Turtlebot3 from source.
 ### Usage
 
 * Run turtlebot3 gazebo emptyworld simulator:
+
     `ros2 launch turtlebot3_gazebo empty_world.launch.py`
+
 * Add some obstacles by inserting some pillars 
 * The goal is set (by default) at x = 5.0, y = -3.0, you can easily change the target goal later in src folder
 and then build the package again.
 
 * Open another Terminal, then give this command:
     `source install/setup.bash`
+
     `ros2 run hello mpc_obstacle_avoid`
 
 * Enjoy watching the robot navigates and reached the goal and avoid all obstacles !
