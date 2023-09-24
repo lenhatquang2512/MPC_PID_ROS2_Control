@@ -1,30 +1,31 @@
-# cmake_minimum_required(VERSION 3.5)
-# project(hello)
+cmake_minimum_required(VERSION 3.5)
+project(hello)
 
-# # # Default to C99
-# # if(NOT CMAKE_C_STANDARD)
-# #   set(CMAKE_C_STANDARD 99)
-# # endif()
+# # Default to C99
+# if(NOT CMAKE_C_STANDARD)
+#   set(CMAKE_C_STANDARD 99)
+# endif()
 
-# # # Default to C++14
-# # if(NOT CMAKE_CXX_STANDARD)
-# #   set(CMAKE_CXX_STANDARD 14)
-# # endif()
+# Default to C++14
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 14)
+endif()
 
-# # if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-# #   add_compile_options(-Wall -Wextra -Wpedantic)
-# # endif()
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
-# # find dependencies
-# find_package(ament_cmake REQUIRED)
-# find_package(rclcpp REQUIRED)
-# find_package(geometry_msgs REQUIRED)
-# find_package(nav_msgs REQUIRED)
-# find_package(tf2 REQUIRED)
-# find_package(std_msgs REQUIRED)
-# find_package(eigen3_cmake_module REQUIRED)
-# find_package(Eigen3 REQUIRED)
-# find_package(Ceres REQUIRED )
+# find dependencies
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(eigen3_cmake_module REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(Ceres REQUIRED )
 
 
 # # add_executable(my_node src/my_node.cpp)
@@ -32,21 +33,22 @@
 # #   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 # #   $<INSTALL_INTERFACE:include>)
 
-# include_directories(
-#   include
-# )
+include_directories(
+  include
+)
 
 # include_directories(${CERES_INCLUDE_DIRS})
 
 # # set(library_name hello)
 
-# set(dependencies 
-#   rclcpp
-#   tf2
-#   geometry_msgs
-#   nav_msgs
-#   Ceres
-# )
+set(dependencies 
+  rclcpp
+  tf2
+  geometry_msgs
+  nav_msgs
+  Ceres
+  sensor_msgs
+)
 
 # # add_library(${library_name} 
 # # )
@@ -62,46 +64,75 @@
 # #   ${CERES_LIBRARIES}
 # #   )
 
-# #node test
-# # add_executable(turtlebot_controller src/pid_one_turtle.cpp)
+#-------------------------------node test ------------------------------
+add_executable(turtlebot_controller src/pid_one_turtle.cpp)
+target_link_libraries(turtlebot_controller 
+  ${CERES_LIBRARIES}
+  )
+target_include_directories(turtlebot_controller  PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+
+# Link dependencies
+ament_target_dependencies(turtlebot_controller ${dependencies})
+
+# Install executable
+install(TARGETS turtlebot_controller
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+add_executable(pid_naive_obs_avoid src/pid_naive_obs_avoid.cpp)
+# target_link_libraries(mpc_turtle_p2p_velo
+#     ${library_name}
+#     )
+target_include_directories(pid_naive_obs_avoid PUBLIC 
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+
+  target_link_libraries(pid_naive_obs_avoid
+    ${CERES_LIBRARIES}
+)
+
+# Link dependencies
+ament_target_dependencies(pid_naive_obs_avoid ${dependencies})
+
+# Install executable
+install(TARGETS pid_naive_obs_avoid
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+#add here
+add_executable(pid_naive_path_follow src/pid_naive_path_follow.cpp)
+# target_link_libraries(mpc_turtle_p2p_velo
+#     ${library_name}
+#     )
+target_include_directories(pid_naive_path_follow PUBLIC 
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+
+target_link_libraries(pid_naive_path_follow ${CERES_LIBRARIES})
+ament_target_dependencies(pid_naive_path_follow ${dependencies})
+
+# Install executable
+install(TARGETS pid_naive_path_follow
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 # add_executable(mpc_controller src/mpc_controller.cpp)
-# target_link_libraries(mpc_controller 
-#   ${CERES_LIBRARIES}
-#   )
-# target_include_directories(mpc_controller PUBLIC
-#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-#   $<INSTALL_INTERFACE:include>)
-
-# # Link dependencies
+# target_include_directories(mpc_controller PUBLIC ${Eigen3_INCLUDE_DIRS})
 # ament_target_dependencies(mpc_controller ${dependencies})
+# target_link_libraries(mpc_controller ${CERES_LIBRARIES})
 
-# # Install executable
-# install(TARGETS mpc_controller
-#   DESTINATION lib/${PROJECT_NAME}
-# )
+add_executable(mpc_obstacle_avoid src/mpc_obstacle_avoid.cpp)
+target_include_directories(mpc_obstacle_avoid PUBLIC ${Eigen3_INCLUDE_DIRS})
+ament_target_dependencies(mpc_obstacle_avoid ${dependencies})
+target_link_libraries(mpc_obstacle_avoid ${CERES_LIBRARIES})
 
-# # add_executable(mpc_turtle_p2p_velo src/mpc_ceres_ros.cpp)
-# # # target_link_libraries(mpc_turtle_p2p_velo
-# # #     ${library_name}
-# # #     )
-# # target_include_directories(mpc_turtle_p2p_velo PUBLIC 
-# #   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-# #   $<INSTALL_INTERFACE:include>)
-
-# #   target_link_libraries(mpc_turtle_p2p_velo
-# #     ${CERES_LIBRARIES}
-# # )
-
-# # # Link dependencies
-# # ament_target_dependencies(mpc_turtle_p2p_velo ${dependencies})
-
-# # # Install executable
-# # install(TARGETS mpc_turtle_p2p_velo
-# #   DESTINATION lib/${PROJECT_NAME}
-# # )
+install(TARGETS mpc_obstacle_avoid
+  DESTINATION lib/${PROJECT_NAME})
 
 
-# #end node test
+#-------------------------------end node test ------------------------------
 
 
 # # Install launch files
@@ -115,9 +146,9 @@
 # #   RUNTIME DESTINATION bin
 # # )
 
-# install(DIRECTORY include/
-#   DESTINATION include/${PROJECT_NAME}
-# )
+install(DIRECTORY include/
+  DESTINATION include/
+)
 
 
 
@@ -140,9 +171,9 @@
 # #   #set(ament_cmake_cpplint_FOUND TRUE)
 # #   ament_lint_auto_find_test_dependencies()
 # # endif()
-# ament_export_include_directories(include)
-# ament_export_dependencies(${dependencies})
-# ament_package()
+ament_export_include_directories(include)
+ament_export_dependencies(${dependencies})
+ament_package()
 
 #---------------------------------------------------------------------------------------
 
@@ -252,50 +283,50 @@
 
 #--------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.5)
-project(hello)
+# cmake_minimum_required(VERSION 3.5)
+# project(hello)
 
-find_package(ament_cmake REQUIRED)
-find_package(nav_msgs REQUIRED)
-find_package(geometry_msgs REQUIRED)
-find_package(sensor_msgs REQUIRED)
-find_package(rclcpp REQUIRED)
-find_package(std_msgs REQUIRED)
-find_package(Eigen3 REQUIRED)
-find_package(Ceres REQUIRED COMPONENTS SuiteSparse)
-find_package(tf2 REQUIRED)
+# find_package(ament_cmake REQUIRED)
+# find_package(nav_msgs REQUIRED)
+# find_package(geometry_msgs REQUIRED)
+# find_package(sensor_msgs REQUIRED)
+# find_package(rclcpp REQUIRED)
+# find_package(std_msgs REQUIRED)
+# find_package(Eigen3 REQUIRED)
+# find_package(Ceres REQUIRED COMPONENTS SuiteSparse)
+# find_package(tf2 REQUIRED)
 
-include_directories(
-  include
-)
+# include_directories(
+#   include
+# )
 
-set(dependencies 
-  rclcpp
-  geometry_msgs
-  nav_msgs
-  std_msgs
-  sensor_msgs
-  Ceres
-  tf2
-)
+# set(dependencies 
+#   rclcpp
+#   geometry_msgs
+#   nav_msgs
+#   std_msgs
+#   sensor_msgs
+#   Ceres
+#   tf2
+# )
 
-# add_executable(mpc_controller src/mpc_controller.cpp)
-# target_include_directories(mpc_controller PUBLIC ${Eigen3_INCLUDE_DIRS})
-# ament_target_dependencies(mpc_controller ${dependencies})
-# target_link_libraries(mpc_controller ${CERES_LIBRARIES})
+# # add_executable(mpc_controller src/mpc_controller.cpp)
+# # target_include_directories(mpc_controller PUBLIC ${Eigen3_INCLUDE_DIRS})
+# # ament_target_dependencies(mpc_controller ${dependencies})
+# # target_link_libraries(mpc_controller ${CERES_LIBRARIES})
 
-add_executable(mpc_obstacle_avoid src/mpc_obstacle_avoid.cpp)
-target_include_directories(mpc_obstacle_avoid PUBLIC ${Eigen3_INCLUDE_DIRS})
-ament_target_dependencies(mpc_obstacle_avoid ${dependencies})
-target_link_libraries(mpc_obstacle_avoid ${CERES_LIBRARIES})
+# add_executable(mpc_obstacle_avoid src/mpc_obstacle_avoid.cpp)
+# target_include_directories(mpc_obstacle_avoid PUBLIC ${Eigen3_INCLUDE_DIRS})
+# ament_target_dependencies(mpc_obstacle_avoid ${dependencies})
+# target_link_libraries(mpc_obstacle_avoid ${CERES_LIBRARIES})
 
-install(TARGETS mpc_obstacle_avoid
-  DESTINATION lib/${PROJECT_NAME})
+# install(TARGETS mpc_obstacle_avoid
+#   DESTINATION lib/${PROJECT_NAME})
 
-install(DIRECTORY include/
-  DESTINATION include/
-)
+# install(DIRECTORY include/
+#   DESTINATION include/
+# )
 
-ament_export_include_directories(include)
-ament_export_dependencies(${dependencies})
-ament_package()
+# ament_export_include_directories(include)
+# ament_export_dependencies(${dependencies})
+# ament_package()

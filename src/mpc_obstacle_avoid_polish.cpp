@@ -96,20 +96,23 @@ struct MPCProblem {
         //     obstacle_residual += ceres::abs(T(safetyRadius) - dist);
         // }
 
-        T cost = T(0.0);
-        T min_dist = T(1e6);
-        for(const auto& obs : obs_list){
-            T dist = sqrt((x - T (obs[0]) )*(x  - T( obs[0]) ) + (y - T (obs[1]) )*(y - T (obs[1])));
-            min_dist = std::min(min_dist, dist);
-        }
-        if (min_dist <= safetyRadius)  // not too closed
-        {
-            cost = T (INFINITY);
-        }
-        else{
-            cost = T (1.0 / min_dist);
-        }
-        residual[2] = obsWeight * cost;
+        // T cost = T(0.0);
+        // T min_dist = T(1e6);
+        // for(const auto& obs : obs_list){
+        //     T dist = sqrt((x - T (obs[0]) )*(x  - T( obs[0]) ) + (y - T (obs[1]) )*(y - T (obs[1])));
+        //     min_dist = std::min(min_dist, dist);
+        // }
+        // if (min_dist <= safetyRadius)  // not too closed
+        // {
+        //     cost = T (INFINITY);
+        // }
+        // else{
+        //     cost = T (1.0 / min_dist);
+        // }
+        // residual[2] = obsWeight * cost;
+
+        //FIXED STABLE OBSTACLES CASE (TEST WITH 1)
+        residual[2] = ceres::abs (T(0.8) - T(sqrt((x - T (2.5) )*(x  - T(2.5 ) ) + (y - T (-1.5) )*(y - T (-1.5)))));
         
         //residual to obtain target linear velocity
         residual[3] = speedWeight * T( ceres::abs( T(targetV) - v_k));
