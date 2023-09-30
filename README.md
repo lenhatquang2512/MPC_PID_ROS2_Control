@@ -1,7 +1,6 @@
+# MPC_PID_ROS2_Control
 
-## MPC_PID_ROS2_Control
-
-### Requirements
+## Requirements
 
 * Ubuntu 20.04
 * ROS2 Foxy (or newer ROS2 is also proficient) with Turtlebot3 package installed
