@@ -360,7 +360,9 @@ void MPCController::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg){
     //     double dist = sqrt((double(obs[0]) )*(double( obs[0]) ) + (double (obs[1]) )*( double(obs[1])));
     //     std::cout << "Dist = " << dist <<  " x_obs = " << obs[0] << " y_obs = " << obs[1] << std::endl;
     // }
+    
 
+    //TODO: should use static_cast rather than C-type cast like this
     // saving the robot path using points
     Point  p;
     p.x= (float) msg->pose.pose.position.x;
