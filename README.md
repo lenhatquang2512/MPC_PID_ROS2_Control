@@ -8,7 +8,7 @@
 
 Note : You can also clone and build the Turtlebot3 from source.
 
-### Install
+## Install
 
 * `mkdir -p ~/ros2_ws/src`
 * `cd ~/ros2_ws/src`
@@ -17,7 +17,7 @@ Note : You can also clone and build the Turtlebot3 from source.
 * `colcon build --symlink-install`
 * `source install/setup.bash`
 
-### Usage
+## Usage
 
 * Run turtlebot3 gazebo emptyworld simulator:
 
@@ -35,13 +35,13 @@ and then build the package again.
 
 * Enjoy watching the robot navigates and reached the goal and avoid all obstacles !
 
-### Warning
+## Warning
 
 * Since this is Naive MPC planner and control, setting too much obstacles are not recommended.
 It is possible, though, by tuning all the parameters. This is trial and error method, but the purpose of this package is to implement PID and MPC from scratch without using Nav2 plugin controller/planner.
 * Ceres solver is a good tool to solve optimization problem, personally I think it is better than IpOpt.
 
-### UPDATE (September 2023)
+## UPDATE (September 2023)
 
 * Currently the master branch can be built and run for any version of ROS2 including Dashing and Eloquent for Ubuntu 18.04 (running succesfully on Jetson Nano confirmed), and also worked with Foxy installed in VMWare. My package can also be used for almost any kind of mobile robots as long as they have 3 basic topics : /odom , /cmd_vel and /scan. So the requirements for Ubuntu 20.04 with Foxy is not that strictly necessary anymore. I will make more test cases to fully confirm and update the README soon.
 
