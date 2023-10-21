@@ -131,6 +131,15 @@ target_link_libraries(mpc_obstacle_avoid ${CERES_LIBRARIES})
 install(TARGETS mpc_obstacle_avoid
   DESTINATION lib/${PROJECT_NAME})
 
+  ### JOY NODE RUN !
+add_executable(joy_controller_node src/manual_joy_controller.cpp)
+target_include_directories(joy_controller_node PUBLIC ${Eigen3_INCLUDE_DIRS})
+ament_target_dependencies(joy_controller_node ${dependencies})
+target_link_libraries(joy_controller_node ${CERES_LIBRARIES})
+
+install(TARGETS joy_controller_node
+  DESTINATION lib/${PROJECT_NAME})
+
 
 #-------------------------------end node test ------------------------------
 
