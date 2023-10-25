@@ -1,9 +1,9 @@
 /****************************************************************************
- * Adaptive MPC DWA-based Obstacles Avoidance with Turtlebot3 using ROS2 and Google Ceres
+ * Adaptive Direct Shooting MPC-DWA-based Obstacles Avoidance with Turtlebot3 using ROS2 and Google Ceres
  * Copyright (C) MIT 2022-2023 Quang Nhat Le
  *
  * @author Quang Nhat Le - quangle@umich.edu
- * @date   2023-Sep-23 (Last updated)
+ * @date   2023-Oct-20 (Last updated)
  ****************************************************************************/
 
 #include "rclcpp/rclcpp.hpp"
@@ -16,6 +16,9 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <cmath>
 #include <fstream>
+#include <iostream>
+#include <iomanip>
+
 // TODO: Polish the code and add its own library "mpc_obstacle_avoid.h" to reduce for lines for easy reading
 
 #define PRINT_CMD(x) (std::cout << x << std::endl)
@@ -40,26 +43,24 @@ const double lowerV = -0.5; // lower and upper constraints for control input lin
 const double upperV = 1.0;
 const double lowerW = -40.0 * M_PI / 180.0; // lower and upper constraints for control inputs angular
 const double upperW = 40.0 * M_PI / 180.0 ;
-// const double lowerW = -1.0;
-// const double upperW = 1.0;
 const double targetV = 0.4;
 
-const double goalWeight = 0.3;
+const double goalWeight = 0.3; //0.3 seems ok
 const double obsWeight = 1.1;
-const double speedWeight = 0.9;
+const double speedWeight = 1.2; //0.9 or 1.2
 
 const double lookaheadDist_ = 0.4;
-const double safetyRadius = 0.3; // Safety radius to avoid obstacles (robot radiua in this case - burger)
+const double safetyRadius = 0.3; // Safety radius to avoid obstacles (robot radius in this case - burger) 0.3 works ok
 const double robot_stuck_flag_cons = 0.001;  // constant to prevent robot stucked
 
 //handle laser scan too close or too far from obstacles in Gazebo
-const double min_threshold = 0.35;
+const double min_threshold = 0.35;  //0.35 seems ok, not sure
 // const double thres_touch_obs = 1.2;
 const double close_r_tuned = 0.001;
 const double far_r_tuned = 100.0;
 
 // TODO: path to save state and control history , configure so that everytimes run save in different name
-const std::string fname="/home/quang_le/ros2_ws/src/hello/scripts/mpc_rover_state_obs_avoid_3.txt";  //just a directory, please change
+const std::string fname="/home/quang_le/ros2_ws/src/hello/scripts/mpc_rover_state_obs_avoid_1710_7.txt";  //just a directory, please change
 
 /**
  * @brief Normalize angle between -pi and pi
@@ -122,8 +123,8 @@ struct MPCProblem {
     
     // MPC iterations
     for (int i = 0; i < predictionHorizon; ++i) {
-        // should update to industry model with acceleration of both angular and linear
-        // Update state using kinematic model
+        // TODO: should update to industry model with acceleration of both angular and linear
+        // Update state using kinematic bicycle model
         x += v_k * cos(yaw) * dt;
         y += v_k * sin(yaw) * dt;
         yaw += norminalAngle( w_k * dt);
@@ -147,7 +148,8 @@ struct MPCProblem {
         //     T dist = T (sqrt((x - obs_list[i][0])*(x - obs_list[i][0]) + (y - obs_list[i][1])*(y - obs_list[i][1]))) ;
         //     obstacle_residual += ceres::abs(T(safetyRadius) - dist);
         // }
-
+        
+        //This part is DWA but we will set it as a residual (aka a cost function with some weights)
         T cost = T(0.0);
         T min_dist = T(1e6);
         for(const auto& obs : obs_list){
@@ -178,8 +180,6 @@ struct MPCProblem {
         // T dist3 = T (sqrt((x - T (3.0) )*(x  - T(3.0 ) ) + (y - T (-1.0) )*(y - T (-1.0))));
         // residual[4] = T (1.0 /dist3);
         
-
-
     }
     
     return true;
@@ -214,9 +214,14 @@ private:
     std::vector<std::vector<double>> obs_list;
     std::vector<Point> Trajectory; //to save rover trajectory
     rclcpp::Time node_start_time_;
+    std::vector<double> prevOptimalU {0.0,0.0};
+    double best_v, best_w;
+    bool obs_close;
 
     // sensor_msgs::msg::LaserScan scan;
     // geometry_msgs::msg::Twist current_velocity;
+    geometry_msgs::msg::Twist velocity_msg; //current velocity
+    
 
 };
 
@@ -292,12 +297,14 @@ void MPCController::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg){
         new ceres::AutoDiffCostFunction<MPCProblem, 4, 1, 1>(
             new MPCProblem(x, y, theta, x_goal_, y_goal_, obs_list));
 
-    // TODO: create a buffer for the control inputs
+    // Create a buffer for the control inputs
     // these are initialized using the previous control input
     // but more suitable initialization is required for fast optimization
     
-    double v = 0.0;  // Linear velocity
-    double w = 0.0;  // Angular velocity
+    // double v = 0.0;  // Linear velocity
+    // double w = 0.0;  // Angular velocity
+    double v = prevOptimalU[0];  // Linear velocity
+    double w = prevOptimalU[1];  // Angular velocity
     problem.AddResidualBlock(cost_function, nullptr, &v, &w);
     
     // set lower and upper constraints for the control inputs
@@ -305,6 +312,8 @@ void MPCController::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg){
     problem.SetParameterUpperBound(&v, 0, upperV);
     problem.SetParameterLowerBound(&w, 0, lowerW);
     problem.SetParameterUpperBound(&w, 0, upperW);
+
+    //TODO: Check to see whether Ceres supports doing inequality contraints with obs
 
     ceres::Solver::Options options;
     options.minimizer_progress_to_stdout = false; //  if true, debug messages are shown
@@ -324,9 +333,13 @@ void MPCController::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg){
     }
 
     // Publish control inputs to velocity topic
-    geometry_msgs::msg::Twist velocity_msg;
-    velocity_msg.linear.x = v;
-    velocity_msg.angular.z = w;
+    // geometry_msgs::msg::Twist velocity_msg;
+    // velocity_msg.linear.x = v;
+    // velocity_msg.angular.z = w;
+    if(!obs_close){
+        velocity_msg.linear.x = v;
+        velocity_msg.angular.z = w;
+    }
 
     static bool isGoal = false;
 
@@ -348,7 +361,11 @@ void MPCController::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg){
     }
     else{
         // Print solution
-        RCLCPP_INFO(get_logger(), "MPC solution: v = %f, w = %f", v, w);
+        // RCLCPP_INFO(get_logger(), "MPC solution: v = %f, w = %f", v, w);
+        // RCLCPP_INFO(get_logger(), "Current input: v = %f, w = %f", velocity_msg.linear.x, velocity_msg.angular.z);
+        std::cout << std::boolalpha;
+        std::cout << "v = " << velocity_msg.linear.x << "w = " <<  velocity_msg.angular.z << " close to obs: " << obs_close << std::endl;
+
     }
 
     if (!isGoal)
@@ -362,16 +379,27 @@ void MPCController::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg){
     // }
     
 
-    //TODO: should use static_cast rather than C-type cast like this
+    //should use static_cast rather than C-type cast like this
     // saving the robot path using points
     Point  p;
-    p.x= (float) msg->pose.pose.position.x;
-    p.y= (float) msg->pose.pose.position.y;
-    p.v = (float) msg->twist.twist.linear.x ;
-    p.w = (float) msg->twist.twist.angular.z ;
-    p.t = (float) tt;
+    // p.x= (float) msg->pose.pose.position.x;
+    // p.y= (float) msg->pose.pose.position.y;
+    // p.v = (float) msg->twist.twist.linear.x ;
+    // p.w = (float) msg->twist.twist.angular.z ;
+    // p.t = (float) tt;
 
+    p.x= static_cast<float> (msg->pose.pose.position.x);
+    p.y= static_cast<float> (msg->pose.pose.position.y);
+    p.v = static_cast<float> (msg->twist.twist.linear.x) ;
+    p.w = static_cast<float>( msg->twist.twist.angular.z) ;
+    p.t = static_cast<float> (tt);
     Trajectory.push_back(p);
+
+    //Update the prev optimal control input
+    // prevOptimalU[0] = 0.0 ; // Linear velocity
+    // prevOptimalU[1] = 0.0; // Angular velocity
+    best_v = v;
+    best_w = w;
     
 
 }
@@ -403,9 +431,21 @@ void MPCController::laserCallback(const sensor_msgs::msg::LaserScan::SharedPtr m
         if (min_threshold <= range && range <= max_range) {
             r = range;
 
+            prevOptimalU[0] = best_v ; // Linear velocity
+            prevOptimalU[1] = best_w; // Angular velocity
+            obs_close = false;
+
         }else if (std::isfinite(range) && range < min_threshold){
             // r = 0.001;
             r = close_r_tuned;
+
+            prevOptimalU[0] = 0.0 ; // Linear velocity
+            prevOptimalU[1] = 0.0; // Angular velocity
+            obs_close = true;
+            // velocity_msg.linear.x = lowerV;
+            velocity_msg.linear.x = -1.0;
+            // velocity_msg.angular.z = lowerW;
+            velocity_msg.angular.z = 0.0;
 
         }else if (!std::isfinite(range) && range < 0) {
             // Object too close to measure.
@@ -419,6 +459,11 @@ void MPCController::laserCallback(const sensor_msgs::msg::LaserScan::SharedPtr m
             // No objects detected in range.
             // continue;
             r = (double) far_r_tuned;
+
+            prevOptimalU[0] = best_v ; // Linear velocity
+            prevOptimalU[1] = best_w; // Angular velocity
+            // obs_close = false;
+
         } else if (std::isnan(range)) {
             // This is an erroneous, invalid, or missing measurement.
             // Handle or ignore.
