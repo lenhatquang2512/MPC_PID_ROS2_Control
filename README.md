@@ -42,3 +42,8 @@ and then build the package again.
 It is possible, though, by tuning all the parameters. This is trial and error method, but the purpose of this package is to implement PID and MPC from scratch without using Nav2 plugin controller/planner.
 * Ceres solver is a good tool to solve optimization problem, personally I think it is better than IpOpt.
 
+### Note 
+
+* Please check mpc-pid-dev branch for latest update.
+* Also, Im still in my 3rd semester of my 2nd year master at UMich, so I will still update this repo, but slowly.
+
