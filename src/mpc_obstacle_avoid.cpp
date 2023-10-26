@@ -332,6 +332,9 @@ void MPCController::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg){
                     // v = lowerV;
     }
 
+    // TODO: adding some clamp/calib to linear v ?
+    //because we only need to control steering angle
+
     // Publish control inputs to velocity topic
     // geometry_msgs::msg::Twist velocity_msg;
     // velocity_msg.linear.x = v;
