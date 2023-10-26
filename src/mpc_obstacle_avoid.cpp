@@ -32,6 +32,7 @@ using ceres::Solve;
 
 // TODO: should change these parameters into struct config
 // TODO: should make Get/Set functions to manually set goals
+// TODO: maybe use MPC Simulink block in MATLAB to evaluate our proposed controller ?
 const int predictionHorizon = 10;
 const double timeStep = 0.1;
 
@@ -599,6 +600,8 @@ void MPCController::animationPlot(std::string fname){
 
 // void MPCController::process(void){
      // //TODO: something else, maybe connect with the custom Plugin Nav2 control ?
+     //TODO : maybe adding some service/client features for the robot ? 
+            //  like how to switch between different control modes MANUAL->AUTO ?
 // }
 
 /**
