@@ -3,5 +3,7 @@ ros2 launch gazebo_ros gazebo.launch.py world:=/home/quang_le/ros2_ws/src/hello/
 ros2 run hello mpc_obstacle_avoid 
 
  ros2 run tf2_ros static_transform_publisher "0" "0" "0" "0" "0" "0" "map" "scan"
+
+ Remember to change to base_scan not scan 
 ros2 run joy joy_node
 
