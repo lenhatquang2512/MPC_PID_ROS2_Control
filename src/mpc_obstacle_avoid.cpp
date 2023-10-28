@@ -10,6 +10,7 @@
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
+#include "sensor_msgs/msg/imu.hpp"
 // #include "std_msgs/msg/float32_multi_array.hpp"
 #include <ceres/ceres.h>
 #include <tf2/LinearMath/Quaternion.h>
@@ -197,9 +198,11 @@ public:
   MPCController(double x_goal, double y_goal);
   
   //TODO: maybe try adding a destructor for this class ?
+  ~MPCController(void){};
 
   void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);  
   void laserCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg); 
+  void imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg); //just add imu
   void printObs(const std::vector<std::vector<double>>& vec);
   void savePath(std::string fname, std::vector<Point> &path);
   void animationPlot(std::string fname);
@@ -210,6 +213,7 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr velocity_pub_;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr laser_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
 
     double x_goal_, y_goal_;
     std::vector<std::vector<double>> obs_list;
@@ -251,6 +255,8 @@ MPCController::MPCController(double x_goal, double y_goal):
     node_start_time_ = this->now();
 
     // TODO: should add IMU
+    imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
+        "imu", 10, std::bind(&MPCController::imuCallback, this, std::placeholders::_1));
 
     // process();
 }
@@ -334,7 +340,7 @@ void MPCController::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg){
     }
 
     // TODO: adding some clamp/calib to linear v ?
-    //because we only need to control steering angle
+    //because we only need to control steering angle --- > no need because it is already in MPC ub and lb constraints
 
     // Publish control inputs to velocity topic
     // geometry_msgs::msg::Twist velocity_msg;
@@ -596,6 +602,10 @@ void MPCController::animationPlot(std::string fname){
 
     // Uncomment the line below if you want to automatically close gnuplot
     // int retVal = system("killall -9 gnuplot\n");
+}
+
+void MPCController::imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg){
+    // process imu data here, or just get it
 }
 
 // void MPCController::process(void){
