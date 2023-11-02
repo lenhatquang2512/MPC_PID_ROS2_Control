@@ -7,3 +7,26 @@ ros2 run hello mpc_obstacle_avoid
  Remember to change to base_scan not scan 
 ros2 run joy joy_node
 
+
+//OLD CONFIG (Can still works)
+
+const double lowerV = -0.5; // lower and upper constraints for control input linear
+const double upperV = 1.0;
+const double lowerW = -40.0 * M_PI / 180.0; // lower and upper constraints for control inputs angular
+const double upperW = 40.0 * M_PI / 180.0 ;
+const double targetV = 0.4;
+
+const double goalWeight = 0.3; //0.3 seems ok
+const double obsWeight = 1.1;
+const double speedWeight = 1.2; //0.9 or 1.2
+
+const double lookaheadDist_ = 0.4;
+const double safetyRadius = 0.3; // Safety radius to avoid obstacles (robot radius in this case - burger) 0.3 works ok
+const double robot_stuck_flag_cons = 0.001;  // constant to prevent robot stucked
+
+//handle laser scan too close or too far from obstacles in Gazebo
+const double min_threshold = 0.35;  //0.35 seems ok, not sure
+// const double thres_touch_obs = 1.2;
+const double close_r_tuned = 0.001;
+const double far_r_tuned = 100.0;
+

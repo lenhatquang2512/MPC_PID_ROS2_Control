@@ -21,11 +21,12 @@
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/time.hpp"
+#include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 
-#define CONSTRAIN(x, lower, upper) ((x) < (lower) ? (lower) : ((x) > (upper) ? (upper) : (x)))
-
 using namespace std::chrono_literals;
+
+#define CLAMP(x, lower, upper) ((x) < (lower) ? (lower) : ((x) > (upper) ? (upper) : (x)))
 
 /**
  * @brief Robot history trajectory
@@ -40,72 +41,14 @@ struct Point
 	float t;  // time
 };
 
-template <typename PointType>
-void savePath(std::string fname, std::vector<PointType> &path)
-{
-    std::ofstream MyFile(fname);
-
-    for (size_t i = 0; i < path.size(); i++)
-    {
-        MyFile << path[i].x << " " << path[i].y << " " << path[i].v << " " << path[i].w << " " << path[i].t << std::endl;
-    }
-
-    MyFile.close();
-}
-
-void animationPlot(std::string fname)
-{
-    static FILE *gp;
-    if(gp == NULL)
-    {
-        gp = popen("gnuplot -persist","w");
-        fprintf(gp, "set colors classic\n");
-        fprintf(gp, "set grid\n");
-        fprintf(gp, "set xlabel Time [s]\n");
-        fprintf(gp, "set tics font \"Arial, 14\"\n");
-        fprintf(gp, "set xlabel font \"Arial, 14\"\n");
-        fprintf(gp, "set ylabel font \"Arial, 14\"\n");
-    }
-
-    // Plot x versus y
-    fprintf(gp, "set title 'Position (x vs. y)'\n");
-    fprintf(gp, "plot \"%s\" using 1:2 with lines title 'x vs. y'\n", fname.c_str());
-    fflush(gp);
-
-    // Wait for user input (press Enter) before plotting the next graph
-    printf("Press Enter to continue...\n");
-    getchar();
-
-    // Plot v versus t
-    fprintf(gp, "set title 'Linear Velocity (v vs. t)'\n");
-    fprintf(gp, "plot \"%s\" using 5:3 with lines title 'v vs. t'\n", fname.c_str());
-    fflush(gp);
-
-    // Wait for user input (press Enter) before plotting the next graph
-    printf("Press Enter to continue...\n");
-    getchar();
-
-    //Plot w versus t
-    fprintf(gp, "set title 'Angular Velocity (v vs. t)'\n");
-    fprintf(gp, "plot \"%s\" using 5:4 with lines title 'v vs. t'\n", fname.c_str());
-    fflush(gp);
-
-    // Close gnuplot
-    // fclose(gp);  // Do not close gnuplot here to keep the window open
-
-    // Uncomment the line below if you want to automatically close gnuplot
-    // int retVal = system("killall -9 gnuplot\n");
-}
-
-
 class TurtleBotController : public rclcpp::Node {
 
 private:
 
-  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher_;
-  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subscriber_;
-  rclcpp::TimerBase::SharedPtr timer_;
-  rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr laser_subscriber_;
+  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr velocity_pub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+  // rclcpp::TimerBase::SharedPtr timer_;
+  rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr laser_sub_;
   // Define a class member variable for storing the node start time
   rclcpp::Time node_start_time_;
 
@@ -136,84 +79,73 @@ private:
   double dt = 0.1;  // Time step (0.1 seconds)
 
   std::vector<Point> Trajectory;
-  std::string fname="/home/quang_le/ros2_ws/src/hello/scripts/rover_state.txt";
+  std::string fname="/home/quang_le/ros2_ws/src/hello/scripts/pid_rover_state_naive_obs_avoid_2_11_1.txt";
 
   // List of waypoints (desired positions)
   std::vector<std::pair<double, double>> waypoints_;
   size_t current_waypoint_;
 
-  // ... (Obstacle avoidance variables and parameters)
+  //(Obstacle avoidance variables and parameters)
   float threshold1_;
   float threshold2_;
-  geometry_msgs::msg::Twist move_;
-  sensor_msgs::msg::LaserScan current_scan_;
 
-
-  void controlLoop() {
-    // This function is called periodically for control loop updates
-    // You can add any additional logic here
-  }
+  bool obs_close;
 
 public:
-  TurtleBotController() : Node("pid_naive_obs_avoid") {
-    publisher_ = this->create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 1);
-    subscriber_ = this->create_subscription<nav_msgs::msg::Odometry>(
-        "odom", 10,
-        std::bind(&TurtleBotController::poseCallback, this, std::placeholders::_1));
-    // Subscribe to laser scan topic for obstacle detection
-    laser_subscriber_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
-        "scan", 10, std::bind(&TurtleBotController::laserCallback, this, std::placeholders::_1));
+  TurtleBotController();
+  void poseCallback(const nav_msgs::msg::Odometry::SharedPtr pose);
+  void laserCallback(const sensor_msgs::msg::LaserScan::SharedPtr scan);
+  void savePath(std::string fname, std::vector<Point> &path);
+  void animationPlot(std::string fname);
+
+  geometry_msgs::msg::Twist cur_velocity_msg; //current velocity
+  sensor_msgs::msg::LaserScan cur_scan_;
 
 
-    // Initialize the node start time
-    node_start_time_ = this->now();
 
-    // Initialize waypoints
-    waypoints_ = {{-5.0, 3.0}, {3.0, 5.0}, {0.0, 0.0}}; // Add more waypoints as needed
-    // waypoints_ = {{-5.0, 3.0}}; // Add more waypoints as needed
-    // for (double x = -5.0; x <= 5.0; x += 0.5) {
-    //     // Calculate y using a polynomial function (e.g., y = ax^2 + bx + c)
-    //     double a = 0.1;
-    //     double b = 0.0;
-    //     double c = 0.0;
-    //     double y = a * x * x + b * x + c;
+};
 
-    //     // Add the (x, y) point as a waypoint
-    //     waypoints_.push_back({x, y});
-    // }
-    current_waypoint_ = 0;
+TurtleBotController::TurtleBotController() : Node("pid_naive_obs_avoid") {
+  // Create the velocity publisher
+  velocity_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 1);
+   // Subscribe to odom topic for current robot state
+  odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
+      "odom", 10,
+      std::bind(&TurtleBotController::poseCallback, this, std::placeholders::_1));
+  // Subscribe to laser scan topic for obstacle detection
+  laser_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
+      "scan", 10, std::bind(&TurtleBotController::laserCallback, this, std::placeholders::_1));
 
-    // Set the initial desired position
-    desired_x_ = waypoints_[current_waypoint_].first;
-    desired_y_ = waypoints_[current_waypoint_].second;
+  // Initialize the node start time
+  node_start_time_ = this->now();
 
+  // Initialize waypoints
+  // waypoints_ = {{-5.0, 3.0}, {3.0, 5.0}, {0.0, 0.0}}; // Add more waypoints as needed
+  waypoints_ = {{0.0, 0.0}, {3.0, 0.0}, {3.0, 3.0},{6.0, 3.0},{6.0,6.0}}; // Add more waypoints as needed
+  current_waypoint_ = 0;
 
-    // Set the desired position
-    // desired_x_ = -5.0;
-    // desired_y_ = 3.0;
+  // Set the initial desired position
+  // desired_x_ = waypoints_[current_waypoint_].first;
+  // desired_y_ = waypoints_[current_waypoint_].second;
+  desired_x_ = 6.0;
+  desired_y_ = 6.0;
 
-    // desired_x_ = 5.0;
-    // desired_y_ = -3.0;
+  // ... (Initialize obstacle avoidance parameters and variables)
+  threshold1_ = 0.8;
+  threshold2_ = 0.8;
 
-           // ... (Initialize obstacle avoidance parameters and variables)
-        threshold1_ = 1.5;
-        threshold2_ = 1.5;
+  // Initialize PID errors
+  error_el_ = 0.0;
+  error_et_ = 0.0;
+  integral_el_ = 0.0;
+  integral_et_ = 0.0;
+  previous_error_el_ = 0.0;
+  previous_error_et_ = 0.0;
 
-    // Initialize PID errors
-    error_el_ = 0.0;
-    error_et_ = 0.0;
-    integral_el_ = 0.0;
-    integral_et_ = 0.0;
-    previous_error_el_ = 0.0;
-    previous_error_et_ = 0.0;
+  obs_close = false;
+}
 
-    // Control loop timer
-    timer_ = this->create_wall_timer(100ms,
-                                     std::bind(&TurtleBotController::controlLoop, this));
-    
-  }
-
-    void poseCallback(const nav_msgs::msg::Odometry::SharedPtr pose) {
+void TurtleBotController::poseCallback(const nav_msgs::msg::Odometry::SharedPtr pose) {
     
     //get current time
     rclcpp::Time current_time = this->get_clock()->now();
@@ -280,91 +212,62 @@ public:
     while (control_signal_v < -vmax_)
       control_signal_v = -vmax_;
     
-    // Create the Twist message for publishing velocity commands
-    geometry_msgs::msg::Twist cmd_vel;
-    cmd_vel.linear.x = control_signal_v;
-    cmd_vel.angular.z = control_signal_w;
-
-    move_.linear.x = cmd_vel.linear.x;  // Go forward (linear velocity)
-    move_.angular.z = cmd_vel.angular.z;
+    // // Create the Twist message for publishing velocity commands
+    // geometry_msgs::msg::Twist cmd_vel;
+    // cmd_vel.linear.x = control_signal_v;
+    // cmd_vel.angular.z = control_signal_w;
+    
+    if(!obs_close){
+        cur_velocity_msg.linear.x = control_signal_v ; // Go forward (linear velocity)
+        cur_velocity_msg.angular.z = control_signal_w;
+    }
 
     // std::cout << "Input linear v :"  << control_signal_v << " angular u: " << control_signal_w 
     //  << " error dis: " << desired_dis << std::endl;
 
     if (desired_dis <= lookaheadDist_)
     {
-      cmd_vel.linear.x = 0.0;
-      cmd_vel.angular.z = 0.0;
-      publisher_->publish(cmd_vel);
+      cur_velocity_msg.linear.x = 0.0;
+      cur_velocity_msg.angular.z = 0.0;
+      velocity_pub_->publish(cur_velocity_msg);
       RCLCPP_INFO(this->get_logger(), "TurtleBot reached the goal!");
 
-      // Check if there are more waypoints
-      if (current_waypoint_ < waypoints_.size()) {
-        // Move to the next waypoint
-        desired_x_ = waypoints_[current_waypoint_].first;
-        desired_y_ = waypoints_[current_waypoint_].second;
-        current_waypoint_++;
-      } else {
-        RCLCPP_INFO(this->get_logger(), "All waypoints reached!");
-        // Stop the robot
-        desired_x_ = pose->pose.pose.position.x;
-        desired_y_ = pose->pose.pose.position.y;
+      // // Check if there are more waypoints
+      // if (current_waypoint_ < waypoints_.size()) {
+      //   // Move to the next waypoint
+      //   desired_x_ = waypoints_[current_waypoint_].first;
+      //   desired_y_ = waypoints_[current_waypoint_].second;
+      //   current_waypoint_++;
+      // } else {
+      //   RCLCPP_INFO(this->get_logger(), "All waypoints reached!");
+      //   // Stop the robot
+      //   desired_x_ = pose->pose.pose.position.x;
+      //   desired_y_ = pose->pose.pose.position.y;
 
-        savePath(fname, Trajectory);
-        animationPlot(fname);
+      //   savePath(fname, Trajectory);
+      //   animationPlot(fname);
 
-        // Shutdown the ROS 2 node to terminate the program
-        rclcpp::shutdown();
-        return;
+      //   // Shutdown the ROS 2 node to terminate the program
+      //   rclcpp::shutdown();
+      //   return;
 
-      }
+      // }
 
-      // savePath(fname, Trajectory);
-      // animationPlot(fname);
+      savePath(fname, Trajectory);
+      animationPlot(fname);
 
-      // // Shutdown the ROS 2 node to terminate the program
-      // rclcpp::shutdown();
-      // return;
-
-      
+      // Shutdown the ROS 2 node to terminate the program
+      rclcpp::shutdown();
+      return;
     }
+  
+    static bool isGoal = false;
 
-    // if ((current_scan_.ranges[0] > (float)threshold1_) && (current_scan_.ranges[15] > (float)threshold2_) && (current_scan_.ranges[345] > (float)threshold2_)) {
-    //     // move_.linear.x = 0.5;  // Go forward (linear velocity)
-    //     RCLCPP_INFO(this->get_logger(), "YOOO\n");
-    //     // move_.angular.z = 0.0;  // Do not rotate (angular velocity)
-    //     // cmd_vel.linear.x = 0.5;  // Go forward (linear velocity)
-    //     // cmd_vel.angular.z = 0.0;  // Do not rotate (angular velocity)
-    // } else {
-    //     RCLCPP_INFO(this->get_logger(), "HAHHAH\n");
-    //     // cmd_vel.linear.x = 0.0;  // Stop
-    //     // cmd_vel.angular.z = 0.5;  // Rotate counter-clockwise
-
-    //     // if(current_scan_.ranges[0] > threshold1_ && current_scan_.ranges[15] > threshold2_ && current_scan_.ranges[345] > threshold2_){
-    //     //  cmd_vel.linear.x = 0.5;  // Go forward (linear velocity)
-    //     //  cmd_vel.angular.z = 0.0;  // Do not rotate (angular velocity)
-    //     // }
-    // }
-
-    // Convert to double before comparison
-    // double range0 = static_cast<double>(current_scan_.ranges[0]);
-    // double range15 = static_cast<double>(current_scan_.ranges[15]);
-    // double range345 = static_cast<double>(current_scan_.ranges[345]);
-
-    // std::cout << range0 << range15 << range345 << std::endl;
-
-    // if (range0 > threshold1_ && range15 > threshold2_ && range345 > threshold2_) {
-    //     RCLCPP_INFO(this->get_logger(), "Obstacle detected");
-    //     // Your obstacle avoidance logic here...
-    // } else {
-    //     // Your alternative logic here...
-    //     RCLCPP_INFO(this->get_logger(), "NOOOOOO Obstacle detected");
-    // }
-
-    // Publish the velocity command
-    publisher_->publish(cmd_vel);
-    // publisher_->publish(move_);
-
+    if (!isGoal)
+    {
+      // Publish the velocity command
+      velocity_pub_->publish(cur_velocity_msg); 
+    }
 
     // Update previous errors
     previous_error_el_ = error_el_;
@@ -380,45 +283,151 @@ public:
 
     Trajectory.push_back(p);
 
-  }
+}
 
-  // Obstacle avoidance callback function
-  void laserCallback(const sensor_msgs::msg::LaserScan::SharedPtr scan) {
-      current_scan_ =  *scan;
 
-      RCLCPP_INFO(this->get_logger(), "-------------------------------------------");
-      RCLCPP_INFO(this->get_logger(), "Range data at 0 deg:   %f", current_scan_ .ranges[0]);
-      RCLCPP_INFO(this->get_logger(), "Range data at 15 deg:  %f", current_scan_ .ranges[15]);
-      RCLCPP_INFO(this->get_logger(), "Range data at 345 deg: %f", current_scan_ .ranges[345]);
-      RCLCPP_INFO(this->get_logger(), "-------------------------------------------");
+void TurtleBotController::laserCallback(const sensor_msgs::msg::LaserScan::SharedPtr scan) {
+      cur_scan_ =  *scan;
 
-      // RCLCPP_INFO(this->get_logger(), "Laser data received");
+      // RCLCPP_INFO(this->get_logger(), "-------------------------------------------");
+      // RCLCPP_INFO(this->get_logger(), "Range data at 0 deg:   %f", cur_scan_ .ranges[0]);
+      // RCLCPP_INFO(this->get_logger(), "Range data at 15 deg:  %f", cur_scan_ .ranges[15]);
+      // RCLCPP_INFO(this->get_logger(), "Range data at 345 deg: %f", cur_scan_ .ranges[345]);
+      // RCLCPP_INFO(this->get_logger(), "-------------------------------------------");
 
-      // current_scan_ = *scan;
+      // Convert to double before comparison
+      double range0 = static_cast<double>(cur_scan_.ranges[0]);
+      double range15 = static_cast<double>(cur_scan_.ranges[15]);
+      double range345 = static_cast<double>(cur_scan_.ranges[345]);
 
-      // // Convert to double before comparison
-      // double range0 = static_cast<double>(current_scan_.ranges[0]);
-      // double range15 = static_cast<double>(current_scan_.ranges[15]);
-      // double range345 = static_cast<double>(current_scan_.ranges[345]);
+      rclcpp::Duration duration(2.0); // Publish for 2 seconds
 
-      // // std::cout << range0 << range15 << range345 << std::endl;
+      // std::cout << range0 << range15 << range345 << std::endl;
 
-      // if (range0 > threshold1_ && range15 > threshold2_ && range345 > threshold2_) {
-      //     RCLCPP_INFO(this->get_logger(), "Obstacle detected");
-      //     // Your obstacle avoidance logic here...
-      // } else {
+      if (range0 > threshold1_ && range15 > threshold2_ && range345 > threshold2_) {
+          // RCLCPP_INFO(this->get_logger(), "Obstacle detected");
+          obs_close = false;
+
+          // Your obstacle avoidance logic here...
+
+        // cur_velocity_msg.linear.x = 0.5 ;//go forward (linear velocity)
+        // cur_velocity_msg.angular.z = 0.0 ;//do not rotate (angular velocity)
+        RCLCPP_INFO(this->get_logger(), "NOOOOOO Obstacle detected");
+      } else{
+        RCLCPP_INFO(this->get_logger(), "Obstacle detected");
+        obs_close = true;
+        // rclcpp::Time start_time = this->get_clock()->now();
+
+        // while (rclcpp::ok()) {
+        //   rclcpp::Time current_time = this->get_clock()->now();
+          // if (current_time - start_time < duration) {
+              cur_velocity_msg.linear.x = 0.0; // stop
+              cur_velocity_msg.angular.z = 0.5 ;//rotate counter-clockwise
+              velocity_pub_->publish(cur_velocity_msg);
+              // rclcpp::spin_some(this->get_node_base_interface());
+          // } else {
+                      // Wait for the specified duration
+              // rclcpp::sleep_for(std::chrono::seconds(2));
+              cur_velocity_msg.linear.x = -0.5; // stop
+              cur_velocity_msg.angular.z = 0.0 ;//rotate counter-clockwise
+              velocity_pub_->publish(cur_velocity_msg); 
+              // break;
+          // }
+      // }
+        if(cur_scan_.ranges[0]>threshold1_ and cur_scan_.ranges[15]>threshold2_ and cur_scan_.ranges[345]>threshold2_)
+        {
+            obs_close = false;
+            // cur_velocity_msg.linear.x = 0.5;
+            // cur_velocity_msg.angular.z = 0.0 ;
+            RCLCPP_INFO(this->get_logger(), "NOOOOOO Obstacle detected");
+        }
+        // else{
+        //   obs_close = false;
+        //          RCLCPP_INFO(this->get_logger(), "NOOOOOO Obstacle detected");
+        // }
+        }
+      // else {
       //     // Your alternative logic here...
       //     RCLCPP_INFO(this->get_logger(), "NOOOOOO Obstacle detected");
       // }
-  }
 
-  // void laserCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
-};
+}
+
+/**
+ * @brief Save the trajectory and all states of robots to file to plot later
+ * 
+ * @param fname 
+ * @param path 
+ */
+void TurtleBotController::savePath(std::string fname, std::vector<Point> &path)
+{
+    std::ofstream MyFile(fname);
+
+    for (size_t i = 0; i < path.size(); i++)
+    {
+        MyFile << path[i].x << " " << path[i].y << " " << path[i].v << " " << path[i].w << " " << path[i].t << std::endl;
+    }
+
+    MyFile.close();
+}
+
+/**
+ * @brief Plotting using Gnuplot right after finishing navigation
+ * 
+ * @param fname 
+ */
+void TurtleBotController::animationPlot(std::string fname){
+    static FILE *gp;
+    if(gp == NULL)
+    {
+        gp = popen("gnuplot -persist","w");
+        fprintf(gp, "set colors classic\n");
+        fprintf(gp, "set grid\n");
+        fprintf(gp, "set xlabel Time [s]\n");
+        fprintf(gp, "set tics font \"Arial, 14\"\n");
+        fprintf(gp, "set xlabel font \"Arial, 14\"\n");
+        fprintf(gp, "set ylabel font \"Arial, 14\"\n");
+    }
+
+    // Plot x versus y
+    fprintf(gp, "set title 'Position (x vs. y)'\n");
+    fprintf(gp, "plot \"%s\" using 1:2 with lines title 'x vs. y'\n", fname.c_str());
+    fflush(gp);
+
+    // Wait for user input (press Enter) before plotting the next graph
+    printf("Press Enter to continue...\n");
+    getchar();
+
+    // Plot v versus t
+    fprintf(gp, "set title 'Linear Velocity (v vs. t)'\n");
+    fprintf(gp, "plot \"%s\" using 5:3 with lines title 'v vs. t'\n", fname.c_str());
+    fflush(gp);
+
+    // Wait for user input (press Enter) before plotting the next graph
+    printf("Press Enter to continue...\n");
+    getchar();
+
+    //Plot w versus t
+    fprintf(gp, "set title 'Angular Velocity (w vs. t)'\n");
+    fprintf(gp, "plot \"%s\" using 5:4 with lines title 'w vs. t'\n", fname.c_str());
+    fflush(gp);
+
+    // Close gnuplot
+    // fclose(gp);  // Do not close gnuplot here to keep the window open
+
+    // Uncomment the line below if you want to automatically close gnuplot
+    // int retVal = system("killall -9 gnuplot\n");
+}
 
 
 
-
-
+/**
+ * @brief Calling the class node object or whatever it is, not sure make_shared means
+ * 
+ * @param argc 
+ * @param argv 
+ * @return int 
+ */
 int main(int argc, char **argv) {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<TurtleBotController>();

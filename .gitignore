@@ -2,3 +2,5 @@
 
 src/mpc_ceres_ros.cpp
 
+src/pid_configured_true_dev.cpp
+
