@@ -196,16 +196,17 @@ MPCController::MPCController(void):
 
     // Initialize waypoints
     // waypoints_ = {{0.0, 0.0}, {3.0, 0.0}, {3.0, 3.0},{6.0, 3.0},{6.0,6.0}}; // Add more waypoints as needed
-    for (double x = -5.0; x <= 5.0; x += 0.5) {
-        // Calculate y using a polynomial function (e.g., y = ax^2 + bx + c)
-        double a = 0.1;
-        double b = 0.0;
-        double c = 0.0;
-        double y = a * x * x + b * x + c;
+    waypoints_ = {{0.0, 0.0}, {3.0, 0.0}, {3.0, 3.0},{6.0, 3.0},{6.0,6.0},{0.0, 0.0} }; // Loopback version
+    // for (double x = -5.0; x <= 5.0; x += 0.5) {
+    //     // Calculate y using a polynomial function (e.g., y = ax^2 + bx + c)
+    //     double a = 0.05;
+    //     double b = 0.06;
+    //     double c = 0.07;
+    //     double y = a * std::pow(x,3) + b * std::pow(x,2) + c * x ;
 
-        // Add the (x, y) point as a waypoint
-        waypoints_.push_back({x, y});
-    }
+    //     // Add the (x, y) point as a waypoint
+    //     waypoints_.push_back({x, y});
+    // }
 
     current_waypoint_ = 0;
 
