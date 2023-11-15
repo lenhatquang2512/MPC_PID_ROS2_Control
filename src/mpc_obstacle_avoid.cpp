@@ -3,7 +3,7 @@
  * Copyright (C) MIT 2022-2023 Quang Nhat Le
  *
  * @author Quang Nhat Le - quangle@umich.edu
- * @date   2023-Oct-20 (Last updated)
+ * @date   2023-Oct-30 (Last updated)
  ****************************************************************************/
 
 #include "rclcpp/rclcpp.hpp"
@@ -11,7 +11,6 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "sensor_msgs/msg/imu.hpp"
-// #include "std_msgs/msg/float32_multi_array.hpp"
 #include <ceres/ceres.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
@@ -19,10 +18,12 @@
 #include <fstream>
 #include <iostream>
 #include <iomanip>
+// #include "std_msgs/msg/float32_multi_array.hpp"
 
 // TODO: Polish the code and add its own library "mpc_obstacle_avoid.h" to reduce for lines for easy reading
 
 #define PRINT_CMD(x) (std::cout << x << std::endl)
+#define PRINT_CMD_2(x,y) (std::cout << x << y << std::endl)
 #define CLAMP(x, lower, upper) ((x) < (lower) ? (lower) : ((x) > (upper) ? (upper) : (x)))
 
 using ceres::AutoDiffCostFunction;
@@ -41,28 +42,29 @@ const double timeStep = 0.1;
 const double targetX = 6.0; 
 const double targetY = 6.0;
 
-const double lowerV = -0.5; // lower and upper constraints for control input linear
+const double lowerV = -1.0; // lower and upper constraints for control input linear
 const double upperV = 1.0;
-const double lowerW = -40.0 * M_PI / 180.0; // lower and upper constraints for control inputs angular
-const double upperW = 40.0 * M_PI / 180.0 ;
-const double targetV = 0.4;
+const double lowerW = -50.0 * M_PI / 180.0; // lower and upper constraints for control inputs angular
+const double upperW = 50.0 * M_PI / 180.0 ;
+const double targetV = 0.7;
 
 const double goalWeight = 0.3; //0.3 seems ok
 const double obsWeight = 1.1;
 const double speedWeight = 1.2; //0.9 or 1.2
 
-const double lookaheadDist_ = 0.4;
-const double safetyRadius = 0.3; // Safety radius to avoid obstacles (robot radius in this case - burger) 0.3 works ok
+const double toleranceDist = 0.4;   //tolerance for robot to stop at goal
+const double safetyRadius = 0.6; // Safety radius to avoid obstacles (robot radius in this case - burger) 0.3 works ok
 const double robot_stuck_flag_cons = 0.001;  // constant to prevent robot stucked
 
 //handle laser scan too close or too far from obstacles in Gazebo
-const double min_threshold = 0.35;  //0.35 seems ok, not sure
+const double min_threshold = 0.3;  //0.35 seems ok, not sure
 // const double thres_touch_obs = 1.2;
 const double close_r_tuned = 0.001;
 const double far_r_tuned = 100.0;
+const bool clearObsInPrevCallback = true;
 
 // TODO: path to save state and control history , configure so that everytimes run save in different name
-const std::string fname="/home/quang_le/ros2_ws/src/hello/scripts/mpc_rover_state_obs_avoid_1710_7.txt";  //just a directory, please change
+const std::string fname="/home/quang_le/ros2_ws/src/hello/scripts/mpc_rover_state_obs_avoid_1710_13.txt";  //just a directory, please change
 
 /**
  * @brief Normalize angle between -pi and pi
@@ -127,6 +129,8 @@ struct MPCProblem {
     for (int i = 0; i < predictionHorizon; ++i) {
         // TODO: should update to industry model with acceleration of both angular and linear
         // Update state using kinematic bicycle model
+        // TODO: Why noy just use RK4 model instead of Forward Euler ? 
+        //  Because w_k is held constant over the time step and the yaw dynamics represent pure integration, forward Euler is exact   
         x += v_k * cos(yaw) * dt;
         y += v_k * sin(yaw) * dt;
         yaw += norminalAngle( w_k * dt);
@@ -207,7 +211,7 @@ public:
   void savePath(std::string fname, std::vector<Point> &path);
   void animationPlot(std::string fname);
 
-  // void process(void);
+  void process(void);
 
 private:
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr velocity_pub_;
@@ -226,6 +230,7 @@ private:
     // sensor_msgs::msg::LaserScan scan;
     // geometry_msgs::msg::Twist current_velocity;
     geometry_msgs::msg::Twist velocity_msg; //current velocity
+    sensor_msgs::msg::Imu imu_current_data; //current feedback imu data
     
 
 };
@@ -257,6 +262,12 @@ MPCController::MPCController(double x_goal, double y_goal):
     // TODO: should add IMU
     imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
         "imu", 10, std::bind(&MPCController::imuCallback, this, std::placeholders::_1));
+
+    //TODO : we use get_clock to get the time, seems ok but we do have a /clock topic,
+    // should try that as well
+
+    //TODO : Also, if we want to switch between MANUAL control mode to AUTO mode,
+    // maybe adding a joystick from manual controller here ?
 
     // process();
 }
@@ -320,7 +331,8 @@ void MPCController::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg){
     problem.SetParameterLowerBound(&w, 0, lowerW);
     problem.SetParameterUpperBound(&w, 0, upperW);
 
-    //TODO: Check to see whether Ceres supports doing inequality contraints with obs
+    //TODO: Check to see whether Ceres supports doing inequality contraints with obs -Not really sure
+    //Seems like we can write a for loop here for all obstacles with only 1 residual 
 
     ceres::Solver::Options options;
     options.minimizer_progress_to_stdout = false; //  if true, debug messages are shown
@@ -341,6 +353,12 @@ void MPCController::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg){
 
     // TODO: adding some clamp/calib to linear v ?
     //because we only need to control steering angle --- > no need because it is already in MPC ub and lb constraints
+    // while (v > upperV)
+    //   v = targetV;
+    // while (v < lowerV)
+    //   v = -targetV;
+
+    // v = CLAMP(v,targetV,-targetV);
 
     // Publish control inputs to velocity topic
     // geometry_msgs::msg::Twist velocity_msg;
@@ -353,7 +371,7 @@ void MPCController::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg){
 
     static bool isGoal = false;
 
-    if (desired_dis <= lookaheadDist_)
+    if (desired_dis <= toleranceDist)
     {
         velocity_msg.linear.x = 0.0;
         velocity_msg.angular.z = 0.0;
@@ -423,7 +441,12 @@ void MPCController::laserCallback(const sensor_msgs::msg::LaserScan::SharedPtr m
 
     //list of obstacles
     // std::vector<std::vector<double>> obs_list;
-    obs_list.clear();
+    //TODO : check whether do we need to actually clear all obs in previous callback ?
+    //If clear --->local optimal solution
+    //If not ----> global optimal solution (takes more time and needs more well calibrations and weights tuning)
+    if(clearObsInPrevCallback){
+        obs_list.clear();   
+    }
 
     // double min_range = msg->range_min;  //ah for gazebo this is just 0.12m
     double max_range = msg->range_max;   //and this is 3.5m, fixed
@@ -453,9 +476,10 @@ void MPCController::laserCallback(const sensor_msgs::msg::LaserScan::SharedPtr m
             prevOptimalU[1] = 0.0; // Angular velocity
             obs_close = true;
             // velocity_msg.linear.x = lowerV;
-            velocity_msg.linear.x = -1.0;
+            velocity_msg.linear.x = 0.0;
+            // velocity_msg.linear.x = -targetV;
             // velocity_msg.angular.z = lowerW;
-            velocity_msg.angular.z = 0.0;
+            velocity_msg.angular.z = 0.5;
 
         }else if (!std::isfinite(range) && range < 0) {
             // Object too close to measure.
@@ -593,8 +617,8 @@ void MPCController::animationPlot(std::string fname){
     getchar();
 
     //Plot w versus t
-    fprintf(gp, "set title 'Angular Velocity (v vs. t)'\n");
-    fprintf(gp, "plot \"%s\" using 5:4 with lines title 'v vs. t'\n", fname.c_str());
+    fprintf(gp, "set title 'Angular Velocity (w vs. t)'\n");
+    fprintf(gp, "plot \"%s\" using 5:4 with lines title 'w vs. t'\n", fname.c_str());
     fflush(gp);
 
     // Close gnuplot
@@ -604,15 +628,30 @@ void MPCController::animationPlot(std::string fname){
     // int retVal = system("killall -9 gnuplot\n");
 }
 
+/**
+ * @brief Call everytime subscribe to /Imu --> get Imu data for acceleration
+ * 
+ * @param msg 
+ */
 void MPCController::imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg){
     // process imu data here, or just get it
+    imu_current_data = *msg;
+
+    //testing imu data
+    // std::cout << " Angular velo z :" << imu_current_data.angular_velocity.z
+    // << " Linear acceleration x: " << imu_current_data.linear_acceleration.x << std::endl;
 }
 
-// void MPCController::process(void){
-     // //TODO: something else, maybe connect with the custom Plugin Nav2 control ?
-     //TODO : maybe adding some service/client features for the robot ? 
-            //  like how to switch between different control modes MANUAL->AUTO ?
-// }
+/**
+ * @brief Adds-on function (to do something , this should work like a Finite State Machines)
+ * 
+ */
+void MPCController::process(void){
+     //TODO: something else, maybe connect with the custom Plugin Nav2 control ?
+    //  TODO : maybe adding some service/client features for the robot ? 
+    //          like how to switch between different control modes MANUAL->AUTO ?
+    //         TODO: add service to Reset the robot poses/ Gazebo enviroment (if using Simulator)
+}
 
 /**
  * @brief Calling the class node object or whatever it is, not sure make_shared means
