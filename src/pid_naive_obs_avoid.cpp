@@ -6,7 +6,7 @@
  * Leveraging ROS2 Foxy and GNUplot in Industrial Applications
  *
  * @author Quang Nhat Le - quangle@umich.edu
- * @date 2023-Sep-19
+ * @date 2023-Nov-2
  ****************************************************************************/
 
 #include <chrono>
@@ -328,10 +328,13 @@ void TurtleBotController::laserCallback(const sensor_msgs::msg::LaserScan::Share
           // } else {
                       // Wait for the specified duration
               // rclcpp::sleep_for(std::chrono::seconds(2));
-              cur_velocity_msg.linear.x = -0.5; // stop
-              cur_velocity_msg.angular.z = 0.0 ;//rotate counter-clockwise
+              // cur_velocity_msg.linear.x = -0.5; // stop
+              // cur_velocity_msg.angular.z = 0.0 ;//rotate counter-clockwise
               velocity_pub_->publish(cur_velocity_msg); 
               // break;
+              // cur_velocity_msg.linear.x = 0.0; // stop
+              // cur_velocity_msg.angular.z = 0.5 ;//rotate counter-clockwise
+              velocity_pub_->publish(cur_velocity_msg); 
           // }
       // }
         if(cur_scan_.ranges[0]>threshold1_ and cur_scan_.ranges[15]>threshold2_ and cur_scan_.ranges[345]>threshold2_)
