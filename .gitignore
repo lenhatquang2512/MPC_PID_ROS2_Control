@@ -1,6 +1,10 @@
 .vscode/
 
+archived/
+
 src/mpc_ceres_ros.cpp
 
 src/pid_configured_true_dev.cpp
+
+src/mpc_obstacle_avoid_polish.cpp
 
